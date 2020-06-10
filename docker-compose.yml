@@ -1,0 +1,75 @@
+version: '3'
+services:
+    flaskback:
+        build: ./BackEnd
+        command: flask run --host=0.0.0.0 --port=8000
+        
+        ports:
+            - 8000:8000
+        environment:
+            - FLASK_APP=app.py
+        depends_on:
+            - db
+            - redis
+        expose:
+            - 8000
+    
+    db:
+        image: postgres
+        environment:
+            - POSTGRES_USER=postgres
+            - POSTGRES_PASSWORD=postgres
+            - POSTGRES_DB=test
+        volumes:
+            - flask_polls_data:/var/lib/postgresql/data
+
+    angularfront:
+        build: ./FrontEnd
+        ports:
+             - '4200:4200'
+        command: ng serve --host 0.0.0.0
+        restart: always
+        volumes: 
+            - './FrontEnd:/FrontEnd'
+            - '/app/node_modules'
+    
+
+    redis:
+        hostname: redis
+        image: redis:alpine
+        ports:
+            - "6379:6379"
+
+    worker:
+        build:
+            context: .
+            dockerfile: Dockerfile
+        
+        environment:
+            - FLASK_APP=BackEnd.app.py    
+        links:
+            - redis
+        depends_on:
+            - redis
+            - flaskback
+        command: celery -A BackEnd.app.celery worker --loglevel=info
+
+        # volumes:
+        #     - ./BackEnd:/BackEnd
+    nginx:
+        container_name: nginx
+        restart: always
+        image: nginx
+        build:
+            context: .
+            dockerfile: nginx/Dockerfile
+        volumes:
+            - /home/rishab/Desktop/crud_app/FrontEnd/dist/angular4/:/usr/share/nginx/html
+            - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+        ports:
+            - "80:80"
+        depends_on:
+            - flaskback
+
+volumes:
+    flask_polls_data:
